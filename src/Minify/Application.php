@@ -167,7 +167,10 @@ class Application {
 
 
     protected function getLocalPath($path) {
-        if (substr($path, 0, $n = strlen($this->config['sourceDir'])) === $this->config['sourceDir']) {
+        $path = realpath($path);
+        $sourceDir = realpath($this->config['sourceDir']);
+
+        if (substr($path, 0, $n = strlen($sourceDir)) === $sourceDir) {
             return ltrim(substr($path, $n), '/');
 
         } else {
