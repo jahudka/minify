@@ -1,7 +1,6 @@
 {
   "name": "jahudka/minify",
   "description": "Minification tool for everyday use",
-  "version": "0.1.0",
   "authors": [
     { "name": "Dan Kadera", "email": "me@subsonic.cz", "role": "Developer" }
   ],
