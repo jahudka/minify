@@ -4,6 +4,7 @@
 if (!isSet($config)) {
 	$config = [
 		'sourceDir' => __DIR__,
+		'outputDir' => __DIR__,
 		'tempDir' => '/tmp',
 		'debug' => false,
 	];

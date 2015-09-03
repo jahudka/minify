@@ -1,340 +1,355 @@
 <?php
-/**
- * Created by PhpStorm.
- * User: danik
- * Date: 07/05/15
- * Time: 16:01
- */
+
 
 namespace Minify;
 
 
 use JShrink\Minifier,
-	lessc;
+    lessc;
 
 class Application {
 
-	/** @var array */
-	public static $defaults = [
-		'sourceDir' => null,
-		'vendorDir' => null,
-		'tempDir' => '/tmp',
-		'debug' => false,
-	];
+    /** @var array */
+    public static $defaults = [
+        'sourceDir' => null,
+        'outputDir' => null,
+        'vendorDir' => null,
+        'tempDir' => '/tmp',
+        'debug' => false,
+    ];
 
-	/** @var array */
-	public $onRequest = [];
+    /** @var array */
+    public $onRequest = [];
 
-	/** @var array */
-	public $onNotFound = [];
+    /** @var array */
+    public $onNotFound = [];
 
-	/** @var array */
-	public $onInvalidRequest = [];
+    /** @var array */
+    public $onInvalidRequest = [];
 
-	/** @var array */
-	public $onCompile = [];
+    /** @var array */
+    public $onCompile = [];
 
-	/** @var array */
-	private $config;
+    /** @var array */
+    private $config;
 
-	/** @var lessc */
-	private $less;
+    /** @var lessc */
+    private $less;
 
 
-	/**
-	 * @param array $config
-	 */
-	public function __construct(array $config) {
-		$this->config = $config + self::$defaults;
+    /**
+     * @param array $config
+     */
+    public function __construct(array $config) {
+        $this->config = $config + self::$defaults;
 
-		if ($this->config['sourceDir'] === null) {
-			$this->config['sourceDir'] = PHP_SAPI === 'cli' ? getcwd() : $_SERVER['DOCUMENT_ROOT'];
+        if ($this->config['sourceDir'] === null) {
+            $this->config['sourceDir'] = PHP_SAPI === 'cli' ? getcwd() : $_SERVER['DOCUMENT_ROOT'];
 
-		}
+        }
 
-		if ($this->config['vendorDir'] === null) {
-			$dir = explode('/', trim(__DIR__, '/'));
+        if ($this->config['vendorDir'] === null) {
+            $dir = explode('/', trim(__DIR__, '/'));
 
-			if (in_array('vendor', $dir)) {
-				while (array_pop($dir) !== 'vendor'); // intentionally empty loop
-				$this->config['vendorDir'] = '/' . implode('/', $dir) . '/vendor';
+            if (in_array('vendor', $dir)) {
+                while (array_pop($dir) !== 'vendor'); // intentionally empty loop
+                $this->config['vendorDir'] = '/' . implode('/', $dir) . '/vendor';
 
-			} else {
-				$this->config['vendorDir'] = false;
+            } else {
+                $this->config['vendorDir'] = false;
 
-			}
-		}
-	}
+            }
+        }
+    }
 
-	/**
-	 * @return bool
-	 */
-	public function isDebug() {
-		return $this->config['debug'];
+    /**
+     * @return bool
+     */
+    public function isDebug() {
+        return $this->config['debug'];
 
-	}
+    }
 
-	/**
-	 * Handles a HTTP request. Checks if a cached version
-	 * matching the request already exists, falling back
-	 * to recompiling the source files and caching them
-	 * if a cached version doesn't exist.
-	 */
-	public function handleRequest() {
-		list ($path, $query) = Helpers::getPathAndQuery();
+    /**
+     * Handles a HTTP request. Checks if a cached version
+     * matching the request already exists, falling back
+     * to recompiling the source files and caching them
+     * if a cached version doesn't exist.
+     */
+    public function handleRequest() {
+        list ($path, $query) = Helpers::getPathAndQuery();
 
-		$request = new \stdClass();
-		$request->path = Helpers::sanitizePath($path);
-		$request->query = $query;
+        $request = new \stdClass();
+        $request->path = Helpers::sanitizePath($path);
+        $request->query = $query;
 
-		if (!preg_match('#\.min\.(js|css|less)$#', $request->path)) {
-			$this->dispatchEvent('invalidRequest', $request);
-			Header('HTTP/1.1 404 Not Found');
-			exit;
+        if (!preg_match('#\.min\.(js|css|less)$#', $request->path)) {
+            $this->dispatchEvent('invalidRequest', $request);
+            Header('HTTP/1.1 404 Not Found');
+            exit;
 
-		}
+        }
 
-		$this->dispatchEvent('request', $request);
+        $this->dispatchEvent('request', $request);
 
-		$request->path = $this->config['sourceDir'] . $request->path;
+        $request->path = $this->config['sourceDir'] . $request->path;
 
-		if (!file_exists($request->path)) {
-			$this->dispatchEvent('notFound', $request->path);
+        if (!file_exists($request->path)) {
+            $this->dispatchEvent('notFound', $request->path);
 
-			Header('HTTP/1.1 404 Not Found');
-			exit;
+            Header('HTTP/1.1 404 Not Found');
+            exit;
 
-		}
+        }
 
-		if ($cached = $this->getCached($request->path, $request, true)) {
-			if ($cached === true) {
-				Header('HTTP/1.1 304 Not Modified');
+        if ($cached = $this->getCached($request->path, $request, true)) {
+            if ($cached === true) {
+                Header('HTTP/1.1 304 Not Modified');
 
-			} else {
-				$this->sendHeaders($request->path);
-				fpassthru($cached);
+            } else {
+                $this->sendHeaders($request->path);
+                fpassthru($cached);
 
-			}
-		} else {
-			$source = $this->prepareSource($request->path);
-			$this->dispatchEvent('compile', $source);
+            }
+        } else {
+            $source = $this->prepareSource($request->path);
+            $this->dispatchEvent('compile', $source);
 
-			$this->sendHeaders($request->path);
+            $this->sendHeaders($request->path);
 
-			try {
-				$this->cache($source, $request);
+            try {
+                $this->cache($source, $request);
 
-			} catch (\Exception $e) {
-				if ($this->config['debug']) {
-					if ($this->getExtension($request->path) === 'js') {
-						echo "\n\nwindow.setTimeout(function(){console.error(" . json_encode($e->getMessage()) . ");},1);\n\n";
+            } catch (\Exception $e) {
+                if ($this->config['debug']) {
+                    if ($this->getExtension($request->path) === 'js') {
+                        echo "\n\nwindow.setTimeout(function(){console.error(" . json_encode($e->getMessage()) . ");},1);\n\n";
 
-					} else {
-						$msg = strtr($e->getMessage(), ["\n" => '\A', '"' => '\"']);
-						echo "\n\nbody:before{position:fixed;left:0;top:0;z-index:10000000;width:100%;text-align:center;white-space:pre-line;background:#000;color:#fff;padding:4px 0;font:bold 14px/17px Arial,sans-serif;content:\"$msg\";}\n\n";
+                    } else {
+                        $msg = strtr($e->getMessage(), ["\n" => '\A', '"' => '\"']);
+                        echo "\n\nbody:before{position:fixed;left:0;top:0;z-index:10000000;width:100%;text-align:center;white-space:pre-line;background:#000;color:#fff;padding:4px 0;font:bold 14px/17px Arial,sans-serif;content:\"$msg\";}\n\n";
 
-					}
-				}
-			}
+                    }
+                }
+            }
 
-			echo $source->getContents();
+            echo $source->getContents();
 
-		}
+        }
 
-		exit;
+        exit;
 
-	}
+    }
 
-	/**
-	 * @param string $path
-	 * @param mixed $meta
-	 */
-	public function compileSource($path, $meta = null) {
-		if (!is_file($path)) {
-			$this->dispatchEvent('notFound', $path);
-			$this->perr("File '$path' doesn't exist or isn't readable by Minify\n");
-			exit (-1);
+    /**
+     * @param string $path
+     * @param mixed $meta
+     */
+    public function compileSource($path, $meta = null) {
+        if (!is_file($path)) {
+            $this->dispatchEvent('notFound', $path);
+            $this->perr("File '$path' doesn't exist or isn't readable by Minify\n");
+            exit (-1);
 
-		}
+        }
 
-		if ($cached = $this->getCached($path, $meta)) {
-			if (is_resource($cached)) {
-				fclose($cached);
+        if ($cached = $this->getCached($path, $meta)) {
+            if (is_resource($cached)) {
+                fclose($cached);
 
-			}
+            }
 
-			$this->perr("A valid cached version found.\n");
+            $this->perr("A valid cached version found.\n");
 
-		} else {
-			$source = $this->prepareSource($path);
-			$this->dispatchEvent('compile', $source);
+        } else {
+            $localPath = $this->getLocalPath($path);
+            $source = $this->prepareSource($path);
+            $this->dispatchEvent('compile', $source);
 
-			try {
-				$this->cache($source, $meta);
+            try {
+                $this->cache($source, $meta);
 
-			} catch (\Exception $e) {
-				$this->perr($e->getMessage() . "\n");
-				exit (-1);
+            } catch (\Exception $e) {
+                $this->perr($e->getMessage() . "\n");
+                exit (-1);
 
-			}
+            }
 
-			$this->perr("File compiled successfully.\n");
+            $this->perr("File $localPath compiled successfully.\n");
 
-		}
-	}
+            $outputPath = $this->config['outputDir'] . '/' . $localPath;
+            @mkdir(dirname($outputPath), 0775, true);
+            file_put_contents($outputPath, $source->getContents());
 
+        }
+    }
 
-	protected function prepareSource($path) {
-		$src = new Source($path);
 
-		if ($this->config['vendorDir']) {
-			$src->setVendorDir($this->config['vendorDir']);
+    protected function getLocalPath($path) {
+        if (substr($path, 0, $n = strlen($this->config['sourceDir'])) === $this->config['sourceDir']) {
+            return ltrim(substr($path, $n), '/');
 
-		}
+        } else {
+            return basename($path);
 
-		if (!$this->config['debug']) {
-			$src->addFilter('\.js$', function($data) { return Minifier::minify($data); });
+        }
+    }
 
-		}
 
-		$src->addFilter('\.less$', function($data) { return $this->getLess()->parse($data); });
+    protected function prepareSource($path) {
+        $src = new Source($path);
 
-		if (!$this->config['debug']) {
-			$src->addFilter('\.(css|less)$', function($data) { return CSSCompressor::process($data); });
+        if ($this->config['vendorDir']) {
+            $src->setVendorDir($this->config['vendorDir']);
 
-		}
+        }
 
-		return $src;
+        if (!$this->config['debug']) {
+            $src->addFilter('\.js$', function($data) { return Minifier::minify($data); });
 
-	}
+        }
 
-	protected function getCached($path, $meta = null, $ifModSince = null) {
-		$cached = $this->config['tempDir'] . '/' . ($this->config['debug'] ? 'dbg-' : 'min-') . sha1($path);
-		$rebuild = true;
+        $src->addFilter('\.less$', function($data) { return $this->getLess()->parse($data); });
 
-		if (file_exists($cached)) {
-			$rebuild = false;
-			$fp = fopen($cached, 'r');
-			$info = json_decode(trim(fgets($fp)), true);
+        if (!$this->config['debug']) {
+            $src->addFilter('\.(css|less)$', function($data) { return CSSCompressor::process($data); });
 
-			if ($info['__key'] !== sha1(json_encode($meta))) {
-				$rebuild = true;
+        }
 
-			} else {
-				foreach ($info['__files'] as $dep) {
-					if (filemtime($dep) > $info['__lastMod']) {
-						$rebuild = true;
-						break;
+        return $src;
 
-					}
-				}
-			}
-		}
+    }
 
-		if ($rebuild) {
-			if (isSet($fp)) {
-				fclose($fp);
+    protected function getCached($path, $meta = null, $ifModSince = null) {
+        $cached = $this->config['tempDir'] . '/' . ($this->config['debug'] ? 'dbg-' : 'min-') . sha1($path);
+        $rebuild = true;
 
-			}
+        if (file_exists($cached)) {
+            $rebuild = false;
+            $fp = fopen($cached, 'r');
+            $info = json_decode(trim(fgets($fp)), true);
 
-			return false;
+            if ($info['__key'] !== sha1(json_encode($meta))) {
+                $rebuild = true;
+                $this->perr('cached file has mismatching meta key, rebuilding');
 
-		}
+            } else {
+                foreach ($info['__files'] as $dep) {
+                    if (filemtime($dep) > $info['__lastMod']) {
+                        $rebuild = true;
+                        $this->perr("file $dep has changed since cached version was created, rebuilding");
+                        break;
 
-		if ($ifModSince) {
-			$ifModSince = isSet($_SERVER['HTTP_IF_MODIFIED_SINCE']) ? strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']) : 0;
+                    }
+                }
+            }
+        }
 
-			if ($info['__lastMod'] <= $ifModSince) {
-				fclose($fp);
-				return true;
+        if ($rebuild) {
+            if (isSet($fp)) {
+                fclose($fp);
 
-			}
+            }
 
-			Header('Last-Modified: ' . @date(DATE_RFC1123, $info['__lastMod']));
+            $this->perr($cached . "\n");
+            return false;
 
-		}
+        }
 
-		return $fp;
+        if ($ifModSince) {
+            $ifModSince = isSet($_SERVER['HTTP_IF_MODIFIED_SINCE']) ? strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']) : 0;
 
-	}
+            if ($info['__lastMod'] <= $ifModSince) {
+                fclose($fp);
+                return true;
 
-	protected function cache(Source $source, $meta = null) {
-		$info = [
-			'__files' => $source->getDependencies(),
-			'__lastMod' => $source->getLastModified(),
-			'__key' => sha1(json_encode($meta)),
-		];
+            }
 
-		$cached = $this->config['tempDir'] . '/' . ($this->config['debug'] ? 'dbg-' : 'min-') . md5($source->getPath());
+            Header('Last-Modified: ' . @date(DATE_RFC1123, $info['__lastMod']));
 
-		if (!@file_put_contents($cached, json_encode($info) . "\n" . $source->getContents())) {
-			throw new \LogicException('Minify: cannot save cached version of file ' . $source->getPath());
+        }
 
-		}
-	}
+        return $fp;
 
-	protected function sendHeaders($path) {
-		switch ($this->getExtension($path)) {
-			case 'js':
-				Header('Content-Type: text/javascript; charset=utf-8');
-				break;
+    }
 
-			case 'less':
-			case 'css':
-				Header('Content-Type: text/css; charset=utf-8');
-				break;
+    protected function cache(Source $source, $meta = null) {
+        $info = [
+            '__files' => $source->getDependencies(),
+            '__lastMod' => $source->getLastModified(),
+            '__key' => sha1(json_encode($meta)),
+        ];
 
-		}
-	}
+        $cached = $this->config['tempDir'] . '/' . ($this->config['debug'] ? 'dbg-' : 'min-') . sha1($source->getPath());
 
-	protected function getLess() {
-		if (!isSet($this->less)) {
-			$this->less = new lessc();
-			$this->less->setPreserveComments(true);
+        if (!@file_put_contents($cached, json_encode($info) . "\n" . $source->getContents())) {
+            throw new \LogicException('Minify: cannot save cached version of file ' . $source->getPath());
 
-		}
+        }
+    }
 
-		return $this->less;
+    protected function sendHeaders($path) {
+        switch ($this->getExtension($path)) {
+            case 'js':
+                Header('Content-Type: text/javascript; charset=utf-8');
+                break;
 
-	}
+            case 'less':
+            case 'css':
+                Header('Content-Type: text/css; charset=utf-8');
+                break;
 
-	protected function getExtension($path) {
-		return strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        }
+    }
 
-	}
+    protected function getLess() {
+        if (!isSet($this->less)) {
+            $this->less = new lessc();
+            $this->less->setPreserveComments(true);
 
-	protected function dispatchEvent($name, $params) {
-		$name = 'on' . ucfirst($name);
+        }
 
-		if (!isSet($this->$name) || !is_array($this->$name)) {
-			throw new \LogicException('Unknown event: ' . $name);
+        return $this->less;
 
-		}
+    }
 
-		if (!is_array($params)) {
-			$params = array_slice(func_get_args(), 1);
+    protected function getExtension($path) {
+        return strtolower(pathinfo($path, PATHINFO_EXTENSION));
 
-		}
+    }
 
-		foreach ($this->$name as $handler) {
-			if (!is_callable($handler)) {
-				throw new \LogicException('Invalid event handler, expected callable, got ' . gettype($handler));
+    protected function dispatchEvent($name, $params) {
+        $name = 'on' . ucfirst($name);
 
-			}
+        if (!isSet($this->$name) || !is_array($this->$name)) {
+            throw new \LogicException('Unknown event: ' . $name);
 
-			call_user_func_array($handler, $params);
+        }
 
-		}
-	}
+        if (!is_array($params)) {
+            $params = array_slice(func_get_args(), 1);
 
-	protected function perr($s) {
-		if (is_resource(STDERR)) {
-			fputs(STDERR, $s);
+        }
 
-		} else {
-			file_put_contents('php://stderr', $s);
+        foreach ($this->$name as $handler) {
+            if (!is_callable($handler)) {
+                throw new \LogicException('Invalid event handler, expected callable, got ' . gettype($handler));
 
-		}
-	}
+            }
+
+            call_user_func_array($handler, $params);
+
+        }
+    }
+
+    protected function perr($s) {
+        if (is_resource(STDERR)) {
+            fputs(STDERR, $s);
+
+        } else {
+            file_put_contents('php://stderr', $s);
+
+        }
+    }
 
 }
