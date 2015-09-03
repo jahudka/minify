@@ -143,9 +143,8 @@ class Application {
 
     /**
      * @param string $path
-     * @param mixed $meta
      */
-    public function compileSource($path, $meta = null) {
+    public function compileSource($path) {
         if (!is_file($path)) {
             $this->dispatchEvent('notFound', $path);
             $this->perr("File '$path' doesn't exist or isn't readable by Minify\n");
@@ -153,35 +152,17 @@ class Application {
 
         }
 
-        if ($cached = $this->getCached($path, $meta)) {
-            if (is_resource($cached)) {
-                fclose($cached);
+        $localPath = $this->getLocalPath($path);
+        $outputPath = $this->config['outputDir'] . '/' . $localPath;
 
-            }
+        $source = $this->prepareSource($path);
+        $this->dispatchEvent('compile', $source);
 
-            $this->perr("A valid cached version found.\n");
+        @mkdir(dirname($outputPath), 0775, true);
+        file_put_contents($outputPath, $source->getContents());
 
-        } else {
-            $localPath = $this->getLocalPath($path);
-            $source = $this->prepareSource($path);
-            $this->dispatchEvent('compile', $source);
+        $this->perr("File $localPath compiled successfully.\n");
 
-            try {
-                $this->cache($source, $meta);
-
-            } catch (\Exception $e) {
-                $this->perr($e->getMessage() . "\n");
-                exit (-1);
-
-            }
-
-            $this->perr("File $localPath compiled successfully.\n");
-
-            $outputPath = $this->config['outputDir'] . '/' . $localPath;
-            @mkdir(dirname($outputPath), 0775, true);
-            file_put_contents($outputPath, $source->getContents());
-
-        }
     }
 
 
@@ -231,13 +212,11 @@ class Application {
 
             if ($info['__key'] !== sha1(json_encode($meta))) {
                 $rebuild = true;
-                $this->perr('cached file has mismatching meta key, rebuilding');
 
             } else {
                 foreach ($info['__files'] as $dep) {
                     if (filemtime($dep) > $info['__lastMod']) {
                         $rebuild = true;
-                        $this->perr("file $dep has changed since cached version was created, rebuilding");
                         break;
 
                     }

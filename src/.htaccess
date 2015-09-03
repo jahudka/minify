@@ -1,0 +1,7 @@
+# Place this file in your output / build directory in your app's document root
+
+RewriteEngine On
+
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule \.min\.(js|css|less)$ minify.php [L,QSA]
