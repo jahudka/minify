@@ -325,7 +325,7 @@ class Application {
     }
 
     protected function perr($s) {
-        if (is_resource(STDERR)) {
+        if (defined('STDERR') && is_resource(STDERR)) {
             fputs(STDERR, $s);
 
         } else {
