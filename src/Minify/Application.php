@@ -16,6 +16,7 @@ class Application {
         'vendorDir' => null,
         'tempDir' => '/tmp',
         'debug' => false,
+        'minify' => null,
     ];
 
     /** @var array */
@@ -59,6 +60,11 @@ class Application {
                 $this->config['vendorDir'] = false;
 
             }
+        }
+
+        if ($this->config['minify'] === null) {
+            $this->config['minify'] = !$this->config['debug'];
+
         }
     }
 
@@ -188,14 +194,14 @@ class Application {
 
         }
 
-        if (!$this->config['debug']) {
+        if ($this->config['minify']) {
             $src->addFilter('\.js$', function($data) { return Minifier::minify($data); });
 
         }
 
         $src->addFilter('\.less$', function($data) { return $this->getLess()->parse($data); });
 
-        if (!$this->config['debug']) {
+        if ($this->config['minify']) {
             $src->addFilter('\.(css|less)$', function($data) { return CSSCompressor::process($data); });
 
         }
@@ -205,7 +211,7 @@ class Application {
     }
 
     protected function getCached($path, $meta = null, $ifModSince = null) {
-        $cached = $this->config['tempDir'] . '/' . ($this->config['debug'] ? 'dbg-' : 'min-') . sha1($path);
+        $cached = $this->config['tempDir'] . '/' . 'min-' . sha1($path);
         $rebuild = true;
 
         if (file_exists($cached)) {
@@ -262,7 +268,7 @@ class Application {
             '__key' => sha1(json_encode($meta)),
         ];
 
-        $cached = $this->config['tempDir'] . '/' . ($this->config['debug'] ? 'dbg-' : 'min-') . sha1($source->getPath());
+        $cached = $this->config['tempDir'] . '/' . 'min-' . sha1($source->getPath());
 
         if (!@file_put_contents($cached, json_encode($info) . "\n" . $source->getContents())) {
             throw new \LogicException('Minify: cannot save cached version of file ' . $source->getPath());

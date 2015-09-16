@@ -7,6 +7,7 @@ if (!isSet($config)) {
 		'outputDir' => __DIR__,
 		'tempDir' => '/tmp',
 		'debug' => false,
+        'minify' => null,
 	];
 }
 
