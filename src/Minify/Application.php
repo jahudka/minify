@@ -86,22 +86,12 @@ class Application {
         list ($path, $query) = Helpers::getPathAndQuery();
 
         $request = new \stdClass();
-        $request->url = $path . ($query ? '?' . $query : '');
         $request->path = Helpers::sanitizePath($path);
         $request->query = $query;
 
         if (!preg_match('#\.min\.(js|css|less)$#', $request->path)) {
             $this->dispatchEvent('invalidRequest', $request);
-
-            if ($this->isDebug()) {
-                $this->error('Invalid request, not a JS/CSS/LESS file', $request);
-
-            } else {
-                Header('HTTP/1.1 404 Not Found');
-
-            }
-
-            exit;
+            $this->error('Invalid request, not a JS/CSS/LESS file');
 
         }
 
@@ -111,16 +101,7 @@ class Application {
 
         if (!file_exists($request->path)) {
             $this->dispatchEvent('notFound', $request->path);
-
-            if ($this->isDebug()) {
-                $this->error('Invalid request, file "' . $request->path . '" not found', $request);
-
-            } else {
-                Header('HTTP/1.1 404 Not Found');
-
-            }
-
-            exit;
+            $this->error('Invalid request, file "' . $request->path . '" not found');
 
         }
 
@@ -143,12 +124,7 @@ class Application {
                 $this->cache($source, $request);
 
             } catch (\Exception $e) {
-                if ($this->isDebug()) {
-                    $this->error($e->getMessage());
-
-                }
-
-                exit;
+                $this->error($e->getMessage());
 
             }
 
@@ -160,11 +136,13 @@ class Application {
 
     }
 
-    public function error($msg, $request = null) {
-        if ($request) {
-            $msg = 'Minify [' . $request->url . ']: ' . $msg;
+    public function error($msg) {
+        if ($this->isDebug()) {
+            $url = $_SERVER['REQUEST_URI'];
+            list($path,) = explode('?', $url);
+            $msg = 'Minify [' . $url . ']: ' . $msg;
 
-            if ($this->getExtension($request->path) === 'js') {
+            if ($this->getExtension($path) === 'js') {
                 echo "\n\nwindow.setTimeout(function(){console.error(" . json_encode($msg) . ");},1);\n\n";
 
             } else {
@@ -173,9 +151,12 @@ class Application {
 
             }
         } else {
-            echo $msg . "\n";
+            Header('HTTP/1.0 404 Not Found');
 
         }
+
+        exit;
+
     }
 
     /**
