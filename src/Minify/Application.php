@@ -86,12 +86,21 @@ class Application {
         list ($path, $query) = Helpers::getPathAndQuery();
 
         $request = new \stdClass();
+        $request->url = $path . ($query ? '?' . $query : '');
         $request->path = Helpers::sanitizePath($path);
         $request->query = $query;
 
         if (!preg_match('#\.min\.(js|css|less)$#', $request->path)) {
             $this->dispatchEvent('invalidRequest', $request);
-            Header('HTTP/1.1 404 Not Found');
+
+            if ($this->isDebug()) {
+                $this->error('Invalid request, not a JS/CSS/LESS file', $request);
+
+            } else {
+                Header('HTTP/1.1 404 Not Found');
+
+            }
+
             exit;
 
         }
@@ -103,7 +112,14 @@ class Application {
         if (!file_exists($request->path)) {
             $this->dispatchEvent('notFound', $request->path);
 
-            Header('HTTP/1.1 404 Not Found');
+            if ($this->isDebug()) {
+                $this->error('Invalid request, file "' . $request->path . '" not found', $request);
+
+            } else {
+                Header('HTTP/1.1 404 Not Found');
+
+            }
+
             exit;
 
         }
@@ -127,16 +143,13 @@ class Application {
                 $this->cache($source, $request);
 
             } catch (\Exception $e) {
-                if ($this->config['debug']) {
-                    if ($this->getExtension($request->path) === 'js') {
-                        echo "\n\nwindow.setTimeout(function(){console.error(" . json_encode($e->getMessage()) . ");},1);\n\n";
+                if ($this->isDebug()) {
+                    $this->error($e->getMessage());
 
-                    } else {
-                        $msg = strtr($e->getMessage(), ["\n" => '\A', '"' => '\"']);
-                        echo "\n\nbody:before{position:fixed;left:0;top:0;z-index:10000000;width:100%;text-align:center;white-space:pre-line;background:#000;color:#fff;padding:4px 0;font:bold 14px/17px Arial,sans-serif;content:\"$msg\";}\n\n";
-
-                    }
                 }
+
+                exit;
+
             }
 
             echo $source->getContents();
@@ -145,6 +158,24 @@ class Application {
 
         exit;
 
+    }
+
+    public function error($msg, $request = null) {
+        if ($request) {
+            $msg = 'Minify [' . $request->url . ']: ' . $msg;
+
+            if ($this->getExtension($request->path) === 'js') {
+                echo "\n\nwindow.setTimeout(function(){console.error(" . json_encode($msg) . ");},1);\n\n";
+
+            } else {
+                $msg = strtr($msg, ["\n" => '\A', '"' => '\"']);
+                echo "\n\nbody:before{position:fixed;left:0;top:0;z-index:10000000;width:100%;text-align:center;white-space:pre-line;background:#000;color:#fff;padding:4px 0;font:bold 14px/17px Arial,sans-serif;content:\"$msg\";}\n\n";
+
+            }
+        } else {
+            echo $msg . "\n";
+
+        }
     }
 
     /**
