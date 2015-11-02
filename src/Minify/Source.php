@@ -200,6 +200,7 @@ class Source {
 
     protected function includeFile($path, $indent) {
         $src = new static($path, $this->indent . $indent);
+        $src->vendorDir = $this->vendorDir;
         $src->filters = $this->filters;
 
         foreach ($src->getDependencies() as $dep) {
