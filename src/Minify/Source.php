@@ -176,17 +176,20 @@ class Source {
 
                 }
 
-                if (array_key_exists($m[1], $this->directives)) {
-                    $parts[$i] = call_user_func($this->directives[$m[1]], $m[2], $dir, $ext, $indent);
+                $directive = $m[1];
+                $params = $this->parseParams($m[2]);
 
-                } else if ($m[1] === 'include') {
-                    $parts[$i] = $this->handleInclude($m[2], $dir, $ext, $indent);
+                if (array_key_exists($directive, $this->directives)) {
+                    $parts[$i] = call_user_func($this->directives[$directive], $params, $dir, $ext, $indent);
 
-                } else if ($m[1] === 'package') {
-                    $parts[$i] = $this->handlePackage($m[2], $ext, $indent);
+                } else if ($directive === 'include') {
+                    $parts[$i] = $this->handleInclude($params, $dir, $ext, $indent);
+
+                } else if ($directive === 'package') {
+                    $parts[$i] = $this->handlePackage($params, $ext, $indent);
 
                 } else {
-                    throw new \LogicException("Invalid directive: {$m[1]}");
+                    throw new \LogicException("Invalid directive: {$directive}");
 
                 }
             }
@@ -198,22 +201,52 @@ class Source {
     }
 
     protected function handleInclude($params, $dir, $ext, $indent) {
-        if (!preg_match('/(?<=^|\s)(file|dir)=("|\')(.+?)\2/', $params, $s)) {
+        if (!isSet($params['file']) && !isSet($params['dir'])) {
             throw new \LogicException('@include directive does not have a "file" or "dir" attribute');
 
         }
 
-        if ($s[1] === 'file') {
-            return $this->includeFile($dir . '/' . $s[3], $indent);
+        if (isSet($params['file'])) {
+            return $this->includeFile($dir . '/' . $params['file'], $indent);
 
         } else /*if ($s[1] === 'dir')*/ {
-            $types = $this->parseTypes($params, $ext);
-            $recursive = $this->parseRecursive($params);
+            $types = isSet($params['types']) ? preg_split('/\s*,\s*/', $params['types']) : [$ext];
+            $recursive = isSet($params['recursive']) && $params['recursive'];
 
-            return $this->includeDir($dir . '/' . $s[3], $types, $recursive, $indent);
+            return $this->includeDir($dir . '/' . $params['dir'], $types, $recursive, $indent);
 
         }
     }
+
+    protected function handlePackage($params, $ext, $indent) {
+        if (!$this->vendorDir) {
+            throw new \LogicException('Composer support is disabled');
+
+        } else if (isSet($params['name'])) {
+            throw new \LogicException('Package name not specified');
+
+        }
+
+        $path = $this->vendorDir . '/' . $params['name'];
+        $types = isSet($params['type']) ? preg_split('/\s*,\s*/', $params['type']) : [$ext];
+
+        if (isSet($params['file'])) {
+            return $this->includeFile($path . '/' . $params['file'], $indent);
+
+        } else if (isSet($params['dir'])) {
+            $recursive = isSet($params['recursive']) && $params['recursive'];
+            return $this->includeDir($path . '/' . $params['dir'], $types, $recursive, $indent);
+
+        } else if (is_file($path . '/loader.' . $ext)) {
+            return $this->includeFile($path . '/loader.' . $ext, $indent);
+
+        } else {
+            return $this->includeDir($path, $types, true, $indent);
+
+        }
+    }
+
+
 
     public function includeFile($path, $indent) {
         $src = new static($path, $this->indent . $indent);
@@ -255,59 +288,22 @@ class Source {
 
     }
 
-    protected function handlePackage($params, $ext, $indent) {
-        if (!$this->vendorDir) {
-            throw new \LogicException('Composer support is disabled');
+    protected function parseParams($params) {
+        $parsed = [];
 
-        }
-
-        if (preg_match('/(?<=^|\s)name=("|\')(.+?)\1/', $params, $p)) {
-            $path = $this->vendorDir . '/' . $p[2];
-            $types = $this->parseTypes($params, $ext);
-
-            if (preg_match('/(?<=^|\s)(file|dir)=("|\')(.+?)\2/', $params, $f)) {
-                if ($f[1] === 'file') {
-                    return $this->includeFile($path . '/' . $f[3], $indent);
+        if (preg_match_all('/([a-z0-9.:-]+)(?:=("(?:\\.|[^"\\\n])*"|\S+))?/i', $params, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $param) {
+                if (isSet($param[2])) {
+                    $parsed[$param[1]] = trim($param[2], '"');
 
                 } else {
-                    $recursive = $this->parseRecursive($params);
-                    return $this->includeDir($path . '/' . $f[3], $types, $recursive, $indent);
-
-                }
-            } else {
-                if (is_file($path . '/loader.' . $ext)) {
-                    return $this->includeFile($path . '/loader.' . $ext, $indent);
-
-                } else {
-                    return $this->includeDir($path, $types, true, $indent);
+                    $parsed[$param[1]] = true;
 
                 }
             }
-        } else {
-            $path = $this->vendorDir . '/' . trim($params);
-
-            if (is_dir($path)) {
-                return $this->includeDir($path, [$ext], true, $indent);
-
-            } else /*if (is_file($path))*/ {
-                return $this->includeFile($path, $indent);
-
-            }
         }
-    }
 
-    protected function parseTypes($params, $ext) {
-        if (preg_match('/(?<=^|\s)types?=("|\')(.+?)\1/', $params, $p)) {
-            return preg_split('/[,\s]+/', $p[2]);
-
-        } else {
-            return [$ext];
-
-        }
-    }
-
-    protected function parseRecursive($params) {
-        return preg_match('/(?<=^|\s)recursive(?:ly)?(?:=("|\')(true|yes|1|false|no|0)\1)?/', $params, $r) && (!isSet($r[2]) || in_array($r[2], ['true', 'yes', '1']));
+        return $parsed;
 
     }
 
