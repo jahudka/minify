@@ -222,7 +222,7 @@ class Source {
         if (!$this->vendorDir) {
             throw new \LogicException('Composer support is disabled');
 
-        } else if (isSet($params['name'])) {
+        } else if (!isSet($params['name'])) {
             throw new \LogicException('Package name not specified');
 
         }
