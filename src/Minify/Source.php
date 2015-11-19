@@ -11,6 +11,9 @@ class Source {
     const EXCLUDE_TOKEN = '/** minified */',
         EXCLUDE_TOKEN_LENGTH = 15;
 
+    /** @var array */
+    private $directives = [];
+
     /** @var string */
     private $path;
 
@@ -77,6 +80,17 @@ class Source {
      */
     public function addFilter($pattern, callable $callback) {
         $this->filters[] = ['pattern' => $pattern, 'callback' => $callback];
+        return $this;
+
+    }
+
+    /**
+     * @param string $name
+     * @param callable $handler
+     * @return $this
+     */
+    public function addDirective($name, callable $handler) {
+        $this->directives[$name] = $handler;
         return $this;
 
     }
@@ -162,7 +176,10 @@ class Source {
 
                 }
 
-                if ($m[1] === 'include') {
+                if (array_key_exists($m[1], $this->directives)) {
+                    $parts[$i] = call_user_func($this->directives[$m[1]], $m[2], $dir, $ext, $indent);
+
+                } else if ($m[1] === 'include') {
                     $parts[$i] = $this->handleInclude($m[2], $dir, $ext, $indent);
 
                 } else if ($m[1] === 'package') {
@@ -198,10 +215,11 @@ class Source {
         }
     }
 
-    protected function includeFile($path, $indent) {
+    public function includeFile($path, $indent) {
         $src = new static($path, $this->indent . $indent);
         $src->vendorDir = $this->vendorDir;
         $src->filters = $this->filters;
+        $src->directives = $this->directives;
 
         foreach ($src->getDependencies() as $dep) {
             $this->addDependency($dep);
@@ -212,7 +230,7 @@ class Source {
 
     }
 
-    protected function includeDir($path, $types, $recursive, $indent) {
+    public function includeDir($path, $types, $recursive, $indent) {
         if (!file_exists($path) || !is_dir($path)) {
             throw new \LogicException("$path does not exist or is not a directory");
 
@@ -268,11 +286,11 @@ class Source {
         } else {
             $path = $this->vendorDir . '/' . trim($params);
 
-            if (is_file($path)) {
-                return $this->includeFile($path, $indent);
-
-            } else if (is_dir($path)) {
+            if (is_dir($path)) {
                 return $this->includeDir($path, [$ext], true, $indent);
+
+            } else /*if (is_file($path))*/ {
+                return $this->includeFile($path, $indent);
 
             }
         }
