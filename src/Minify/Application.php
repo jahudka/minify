@@ -124,7 +124,7 @@ class Application {
 
         if ($cached = $this->getCached($request->path, $request, true)) {
             if ($cached === true) {
-                Header('HTTP/1.1 304 Not Modified');
+                header('HTTP/1.1 304 Not Modified');
 
             } else {
                 $this->sendHeaders($request->path);
@@ -168,7 +168,7 @@ class Application {
 
             }
         } else {
-            Header('HTTP/1.0 404 Not Found');
+            header('HTTP/1.0 404 Not Found');
 
         }
 
@@ -221,6 +221,11 @@ class Application {
         if ($this->config['vendorDir']) {
             $src->setVendorDir($this->config['vendorDir']);
 
+        }
+
+        if ($this->config['bowerDir']) {
+            $src->setBowerDir($this->config['bowerDir']);
+            
         }
 
         if ($this->config['minify']) {
@@ -282,7 +287,7 @@ class Application {
 
             }
 
-            Header('Last-Modified: ' . @date(DATE_RFC1123, $info['__lastMod']));
+            header('Last-Modified: ' . @date(DATE_RFC1123, $info['__lastMod']));
 
         }
 
@@ -308,12 +313,12 @@ class Application {
     protected function sendHeaders($path) {
         switch ($this->getExtension($path)) {
             case 'js':
-                Header('Content-Type: text/javascript; charset=utf-8');
+                header('Content-Type: text/javascript; charset=utf-8');
                 break;
 
             case 'less':
             case 'css':
-                Header('Content-Type: text/css; charset=utf-8');
+                header('Content-Type: text/css; charset=utf-8');
                 break;
 
         }
