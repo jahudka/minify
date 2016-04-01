@@ -176,10 +176,10 @@ class Source {
 
         $dir = dirname($this->path);
         $ext = pathinfo($this->path, PATHINFO_EXTENSION);
-        $parts = preg_split('#(/\*\![ \t]*@(?:\S+)[ \t]+(?:.+?)[ \t]*\*/)#', $this->data, null, PREG_SPLIT_DELIM_CAPTURE);
+        $parts = preg_split('#(/\*\![ \t]*@(?:\S+)(?:[ \t]+(?:.+?))?[ \t]*\*/)#', $this->data, null, PREG_SPLIT_DELIM_CAPTURE);
 
         for ($i = 0, $n = count($parts); $i < $n; $i++) {
-            if (preg_match('#/\*\![ \t]*@(\S+)[ \t]+(.+?)[ \t]*\*/\z#A', $parts[$i], $m)) {
+            if (preg_match('#/\*\![ \t]*@(\S+)(?:[ \t]+(.+?))?[ \t]*\*/\z#A', $parts[$i], $m)) {
                 if ($i > 0) {
                     preg_match('/([^\n]*)\z/', $parts[$i - 1], $p);
                     $indent = preg_replace('/[^ \t]/', ' ', $p[1]);
@@ -190,7 +190,7 @@ class Source {
                 }
 
                 $directive = $m[1];
-                $params = $this->parseParams($m[2]);
+                $params = isSet($m[2]) ? $this->parseParams($m[2]) : [];
 
                 if (array_key_exists($directive, $this->directives)) {
                     $parts[$i] = call_user_func($this->directives[$directive], $params, $dir, $ext, $indent);
@@ -276,7 +276,7 @@ class Source {
 
                 }
             }
-            
+
             return $this->includeDir($path, $types, true, $indent);
 
         }
