@@ -4,6 +4,7 @@
   "authors": [
     { "name": "Dan Kadera", "email": "me@subsonic.cz", "role": "Developer" }
   ],
+  "license": "MIT",
 
   "require": {
     "leafo/lessphp" : "0.4.0",
@@ -12,6 +13,6 @@
   },
 
   "autoload": {
-    "psr-4": { "Minify\\": "src/Minify/" }
+    "classmap": ["src/"]
   }
 }

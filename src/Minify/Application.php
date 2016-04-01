@@ -14,6 +14,7 @@ class Application {
         'sourceDir' => null,
         'outputDir' => null,
         'vendorDir' => null,
+        'bowerDir' => null,
         'tempDir' => '/tmp',
         'debug' => false,
         'minify' => null,
@@ -59,6 +60,22 @@ class Application {
             } else {
                 $this->config['vendorDir'] = false;
 
+            }
+        }
+
+        if ($this->config['bowerDir'] === null) {
+            $this->config['bowerDir'] = false;
+            $dir = dirname($this->config['vendorDir'] ?: realpath(__DIR__ . '/../..'));
+
+            while ($dir !== '/') {
+                if (is_dir($dir . '/bower_components')) {
+                    $this->config['bowerDir'] = $dir . '/bower_components';
+                    break;
+
+                } else {
+                    $dir = dirname($dir);
+
+                }
             }
         }
 

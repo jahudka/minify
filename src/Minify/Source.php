@@ -24,6 +24,9 @@ class Source {
     private $vendorDir = null;
 
     /** @var string */
+    private $bowerDir = null;
+
+    /** @var string */
     private $data;
 
     /** @var array */
@@ -61,6 +64,16 @@ class Source {
      */
     public function setVendorDir($dir) {
         $this->vendorDir = $dir;
+        return $this;
+
+    }
+
+    /**
+     * @param string $dir
+     * @return $this
+     */
+    public function setBowerDir($dir) {
+        $this->bowerDir = $dir;
         return $this;
 
     }
@@ -219,16 +232,35 @@ class Source {
     }
 
     protected function handlePackage($params, $ext, $indent) {
-        if (!$this->vendorDir) {
-            throw new \LogicException('Composer support is disabled');
+        if (!isSet($params['type'])) {
+            throw new \LogicException('Package type not specified');
 
         } else if (!isSet($params['name'])) {
             throw new \LogicException('Package name not specified');
 
+        } else if ($params['type'] === 'composer') {
+            if (!$this->vendorDir) {
+                throw new \LogicException('Composer support is disabled');
+
+            }
+
+            $packageRoot = $this->vendorDir;
+
+        } else if ($params['type'] === 'bower') {
+            if (!$this->bowerDir) {
+                throw new \LogicException('Composer support is disabled');
+
+            }
+
+            $packageRoot = $this->bowerDir;
+
+        } else {
+            throw new \LogicException('Unknown package type: ' . $params['type']);
+
         }
 
-        $path = $this->vendorDir . '/' . $params['name'];
-        $types = isSet($params['type']) ? preg_split('/\s*,\s*/', $params['type']) : [$ext];
+        $path = $packageRoot . '/' . $params['name'];
+        $types = $ext === 'js' ? ['js'] : ['less', 'css'];
 
         if (isSet($params['file'])) {
             return $this->includeFile($path . '/' . $params['file'], $indent);
@@ -237,10 +269,14 @@ class Source {
             $recursive = isSet($params['recursive']) && $params['recursive'];
             return $this->includeDir($path . '/' . $params['dir'], $types, $recursive, $indent);
 
-        } else if (is_file($path . '/loader.' . $ext)) {
-            return $this->includeFile($path . '/loader.' . $ext, $indent);
-
         } else {
+            foreach ($types as $ext) {
+                if (is_file($path . '/loader.' . $ext)) {
+                    return $this->includeFile($path . '/loader.' . $ext, $indent);
+
+                }
+            }
+            
             return $this->includeDir($path, $types, true, $indent);
 
         }
@@ -251,6 +287,7 @@ class Source {
     public function includeFile($path, $indent) {
         $src = new static($path, $this->indent . $indent);
         $src->vendorDir = $this->vendorDir;
+        $src->bowerDir = $this->bowerDir;
         $src->filters = $this->filters;
         $src->directives = $this->directives;
 
