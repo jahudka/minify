@@ -38,6 +38,9 @@ class Source {
     /** @var array */
     private $filters = [];
 
+    /** @var array */
+    private $blocks = [];
+
     /** @var bool */
     private $parsed = false;
 
@@ -177,6 +180,9 @@ class Source {
         $dir = dirname($this->path);
         $ext = pathinfo($this->path, PATHINFO_EXTENSION);
         $parts = preg_split('#(/\*\![ \t]*@(?:\S+)(?:[ \t]+(?:.+?))?[ \t]*\*/)#', $this->data, null, PREG_SPLIT_DELIM_CAPTURE);
+        $blocks = [];
+        $currentBlock = null;
+        $extends = null;
 
         for ($i = 0, $n = count($parts); $i < $n; $i++) {
             if (preg_match('#/\*\![ \t]*@(\S+)(?:[ \t]+(.+?))?[ \t]*\*/\z#A', $parts[$i], $m)) {
@@ -201,23 +207,70 @@ class Source {
                 } else if ($directive === 'package') {
                     $parts[$i] = $this->handlePackage($params, $ext, $indent);
 
+                } else if ($directive === 'extends') {
+                    if ($extends) {
+                        throw new \LogicException("Multiple extends directives in the same file aren't allowed");
+
+                    } else if (empty($params)) {
+                        throw new \LogicException("Invalid @extends directive, either package type and name or file name must be specified");
+
+                    } else {
+                        $extends = $params;
+                        $parts[$i] = '';
+
+                    }
+                } else if ($directive === 'block') {
+                    if (@$params['end']) {
+                        if (!$currentBlock || $currentBlock !== @$params['name']) {
+                            throw new \LogicException("End of a block that isn't open");
+
+                        } else {
+                            $currentBlock = null;
+                            $parts[$i] = '';
+
+                        }
+                    } else {
+                        if (empty($params['name'])) {
+                            throw new \LogicException("Block name not specified");
+
+                        } else {
+                            $currentBlock = $params['name'];
+                            $blocks[$currentBlock] = '';
+                            $parts[$i] = '';
+
+                        }
+                    }
                 } else {
                     throw new \LogicException("Invalid directive: {$directive}");
 
                 }
             }
+
+            if ($currentBlock) {
+                $blocks[$currentBlock] .= $parts[$i];
+
+            }
         }
 
-        $this->data = implode('', $parts);
+        if ($extends) {
+            $this->data = $this->handleExtends($extends, $blocks, $dir, $ext);
+
+        } else {
+            $this->data = implode('', $parts);
+
+        }
+
         $this->parsed = true;
 
     }
 
     protected function handleInclude($params, $dir, $ext, $indent) {
-        if (!isSet($params['file']) && !isSet($params['dir'])) {
-            throw new \LogicException('@include directive does not have a "file" or "dir" attribute');
+        if (isSet($params['block'])) {
+            return isSet($this->blocks[$params['block']]) ? $this->blocks[$params['block']] : '';
 
         }
+
+        $this->validateIncludeParams($params);
 
         if (isSet($params['file'])) {
             return $this->includeFile($dir . '/' . $params['file'], $indent);
@@ -232,33 +285,9 @@ class Source {
     }
 
     protected function handlePackage($params, $ext, $indent) {
-        if (!isSet($params['type'])) {
-            throw new \LogicException('Package type not specified');
+        $this->validatePackageParams($params);
 
-        } else if (!isSet($params['name'])) {
-            throw new \LogicException('Package name not specified');
-
-        } else if ($params['type'] === 'composer') {
-            if (!$this->vendorDir) {
-                throw new \LogicException('Composer support is disabled');
-
-            }
-
-            $packageRoot = $this->vendorDir;
-
-        } else if ($params['type'] === 'bower') {
-            if (!$this->bowerDir) {
-                throw new \LogicException('Composer support is disabled');
-
-            }
-
-            $packageRoot = $this->bowerDir;
-
-        } else {
-            throw new \LogicException('Unknown package type: ' . $params['type']);
-
-        }
-
+        $packageRoot = $this->getPackageRoot($params['type']);
         $path = $packageRoot . '/' . $params['name'];
         $types = $ext === 'js' ? ['js'] : ['less', 'css'];
 
@@ -282,7 +311,56 @@ class Source {
         }
     }
 
+    protected function handleExtends($params, array $blocks, $dir, $ext) {
+        if (@$params['package']) {
+            $this->validatePackageParams($params);
+            $basePath = $this->getPackageRoot($params['type']) . '/' . $params['name'];
 
+        } else {
+            $basePath = $dir;
+
+        }
+
+        if (isSet($params['file'])) {
+            $path = $basePath . '/' . $params['file'];
+
+        } else {
+            if (!@$params['package']) {
+                throw new \LogicException("Invalid @extends directive, either specify a package or a file to extend");
+
+            }
+
+            $types = $ext === 'js' ? ['js'] : ['less', 'css'];
+
+            foreach ($types as $ext) {
+                if (is_file($basePath . '/loader.' . $ext)) {
+                    $path = $basePath . '/loader.' . $ext;
+                    break;
+
+                }
+            }
+        }
+
+        if (!isSet($path) || !is_file($path)) {
+            throw new \LogicException("Invalid @extends directive: path not specified or file not found");
+
+        }
+
+        $src = new static($path);
+        $src->vendorDir = $this->vendorDir;
+        $src->bowerDir = $this->bowerDir;
+        $src->filters = $this->filters;
+        $src->directives = $this->directives;
+        $src->blocks = $blocks;
+
+        foreach ($src->getDependencies() as $dep) {
+            $this->addDependency($dep);
+
+        }
+
+        return $src->getContents();
+
+    }
 
     public function includeFile($path, $indent) {
         $src = new static($path, $this->indent . $indent);
@@ -323,6 +401,46 @@ class Source {
 
         return $contents;
 
+    }
+
+    protected function getPackageRoot($type) {
+        if ($type === 'composer') {
+            if (!$this->vendorDir) {
+                throw new \LogicException('Composer support is disabled');
+
+            }
+
+            return $this->vendorDir;
+
+        } else if ($type === 'bower') {
+            if (!$this->bowerDir) {
+                throw new \LogicException('Composer support is disabled');
+
+            }
+
+            return $this->bowerDir;
+
+        } else {
+            throw new \LogicException('Unknown package type: ' . $type);
+
+        }
+    }
+
+    protected function validatePackageParams(array $params) {
+        if (!isSet($params['type'])) {
+            throw new \LogicException('Package type not specified');
+
+        } else if (!isSet($params['name'])) {
+            throw new \LogicException('Package name not specified');
+
+        }
+    }
+
+    protected function validateIncludeParams(array $params) {
+        if (!isSet($params['file']) && !isSet($params['dir'])) {
+            throw new \LogicException('@include directive does not have a "file" or "dir" attribute');
+
+        }
     }
 
     protected function parseParams($params) {
