@@ -368,6 +368,7 @@ class Source {
         $src->bowerDir = $this->bowerDir;
         $src->filters = $this->filters;
         $src->directives = $this->directives;
+        $src->blocks = $this->blocks;
 
         foreach ($src->getDependencies() as $dep) {
             $this->addDependency($dep);
