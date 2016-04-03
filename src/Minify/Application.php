@@ -365,7 +365,7 @@ class Application {
 
         while ($dir !== '/') {
             if (is_dir($dir . '/bower_components')) {
-                $this->config['bowerDir'] = $dir . '/bower_components';
+                return $dir . '/bower_components';
                 break;
 
             } else {
@@ -374,7 +374,7 @@ class Application {
             }
         }
 
-        return $dir === '/' ? false : $dir;
+        return false;
 
     }
 
