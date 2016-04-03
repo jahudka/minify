@@ -181,6 +181,11 @@ class Application {
      * @param string $outputPath
      */
     public function compileSource($path, $outputPath = null) {
+        if ($path[0] !== '/') {
+            $path = $this->config['sourceDir'] . '/' . $path;
+            
+        }
+
         if (!is_file($path)) {
             $this->dispatchEvent('notFound', $path);
             $this->perr("File '$path' doesn't exist or isn't readable by Minify\n");
