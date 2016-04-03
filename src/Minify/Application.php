@@ -51,32 +51,13 @@ class Application {
         }
 
         if ($this->config['vendorDir'] === null) {
-            $dir = explode('/', trim(__DIR__, '/'));
+            $this->config['vendorDir'] = $this->resolveVendorDir();
 
-            if (in_array('vendor', $dir)) {
-                while (array_pop($dir) !== 'vendor'); // intentionally empty loop
-                $this->config['vendorDir'] = '/' . implode('/', $dir) . '/vendor';
-
-            } else {
-                $this->config['vendorDir'] = false;
-
-            }
         }
 
         if ($this->config['bowerDir'] === null) {
-            $this->config['bowerDir'] = false;
-            $dir = dirname($this->config['vendorDir'] ?: realpath(__DIR__ . '/../..'));
+            $this->config['bowerDir'] = $this->resolveBowerDir();
 
-            while ($dir !== '/') {
-                if (is_dir($dir . '/bower_components')) {
-                    $this->config['bowerDir'] = $dir . '/bower_components';
-                    break;
-
-                } else {
-                    $dir = dirname($dir);
-
-                }
-            }
         }
 
         if ($this->config['minify'] === null) {
@@ -90,6 +71,22 @@ class Application {
      */
     public function isDebug() {
         return $this->config['debug'];
+
+    }
+
+    /**
+     * @return string|false
+     */
+    public function getVendorDir() {
+        return $this->config['vendorDir'];
+
+    }
+
+    /**
+     * @return string|false
+     */
+    public function getBowerDir() {
+        return $this->config['bowerDir'];
 
     }
 
@@ -183,7 +180,7 @@ class Application {
     public function compileSource($path, $outputPath = null) {
         if ($path[0] !== '/') {
             $path = $this->config['sourceDir'] . '/' . $path;
-            
+
         }
 
         if (!is_file($path)) {
@@ -347,6 +344,37 @@ class Application {
         }
 
         return $this->less;
+
+    }
+
+    protected function resolveVendorDir() {
+        $dir = explode('/', trim(__DIR__, '/'));
+
+        if (in_array('vendor', $dir)) {
+            while (array_pop($dir) !== 'vendor'); // intentionally empty loop
+            return '/' . implode('/', $dir) . '/vendor';
+
+        } else {
+            return false;
+
+        }
+    }
+
+    protected function resolveBowerDir() {
+        $dir = dirname($this->config['vendorDir'] ?: realpath(__DIR__ . '/../..'));
+
+        while ($dir !== '/') {
+            if (is_dir($dir . '/bower_components')) {
+                $this->config['bowerDir'] = $dir . '/bower_components';
+                break;
+
+            } else {
+                $dir = dirname($dir);
+
+            }
+        }
+
+        return $dir === '/' ? false : $dir;
 
     }
 
