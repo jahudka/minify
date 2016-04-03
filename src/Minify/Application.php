@@ -35,9 +35,6 @@ class Application {
     /** @var array */
     private $config;
 
-    /** @var lessc */
-    private $less;
-
 
     /**
      * @param array $config
@@ -245,7 +242,11 @@ class Application {
 
         }
 
-        $src->addFilter('\.less$', function($data) { return $this->getLess()->parse($data); });
+        $src->addFilter('\.less$', function($data, $path) {
+            $less = $this->createLess();
+            $less->setImportDir(dirname($path));
+            return $less->parse($data);
+        });
 
         if ($this->config['minify']) {
             $src->addFilter('\.(css|less)$', function($data) { return CSSCompressor::process($data); });
@@ -336,14 +337,10 @@ class Application {
         }
     }
 
-    protected function getLess() {
-        if (!isSet($this->less)) {
-            $this->less = new lessc();
-            $this->less->setPreserveComments(true);
-
-        }
-
-        return $this->less;
+    protected function createLess() {
+        $less = new lessc();
+        $less->setPreserveComments(true);
+        return $less;
 
     }
 
