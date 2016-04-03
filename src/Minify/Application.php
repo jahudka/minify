@@ -178,8 +178,9 @@ class Application {
 
     /**
      * @param string $path
+     * @param string $outputPath
      */
-    public function compileSource($path) {
+    public function compileSource($path, $outputPath = null) {
         if (!is_file($path)) {
             $this->dispatchEvent('notFound', $path);
             $this->perr("File '$path' doesn't exist or isn't readable by Minify\n");
@@ -188,7 +189,16 @@ class Application {
         }
 
         $localPath = $this->getLocalPath($path);
-        $outputPath = $this->config['outputDir'] . '/' . $localPath;
+
+        if (!$outputPath) {
+            $outputPath = $localPath;
+
+        }
+
+        if ($outputPath[0] !== '/') {
+            $outputPath = $this->config['outputDir'] . '/' . $outputPath;
+
+        }
 
         $source = $this->prepareSource($path);
         $this->dispatchEvent('compile', $source);
@@ -225,7 +235,7 @@ class Application {
 
         if ($this->config['bowerDir']) {
             $src->setBowerDir($this->config['bowerDir']);
-            
+
         }
 
         if ($this->config['minify']) {
