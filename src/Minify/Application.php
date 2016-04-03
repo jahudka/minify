@@ -366,7 +366,6 @@ class Application {
         while ($dir !== '/') {
             if (is_dir($dir . '/bower_components')) {
                 return $dir . '/bower_components';
-                break;
 
             } else {
                 $dir = dirname($dir);
