@@ -179,7 +179,7 @@ class Source {
 
         $dir = dirname($this->path);
         $ext = pathinfo($this->path, PATHINFO_EXTENSION);
-        $parts = preg_split('#(/\*\![ \t]*@(?:\S+)(?:[ \t]+(?:.+?))?[ \t]*\*/)#', $this->data, null, PREG_SPLIT_DELIM_CAPTURE);
+        $parts = preg_split('#(/\*\![ \t]*@(?:\S+)(?:[ \t]+(?!\*/).+?)?[ \t]*\*/)#', $this->data, null, PREG_SPLIT_DELIM_CAPTURE);
         $blocks = [];
         $currentBlock = null;
         $extends = null;
